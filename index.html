@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Expense Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Expense Manager</h1>
+    <p class="subtitle">Track spending, view reports</p>
+  </header>
+
+  <main class="container auth-container" id="auth-view" style="max-width:400px; padding-top: 50px;">
+    <section class="card">
+      <h2 id="auth-title">Login</h2>
+      <form id="auth-form" class="form">
+        <label>
+          Username
+          <input type="text" id="auth-username" required />
+        </label>
+        <label>
+          Password
+          <input type="password" id="auth-password" required />
+        </label>
+        <div class="form-actions" style="margin-top: 20px;">
+          <button type="submit" class="btn primary" id="auth-submit-btn">Login</button>
+          <button type="button" class="btn" id="toggle-auth-btn">Need an account? Register</button>
+        </div>
+      </form>
+    </section>
+  </main>
+  <main class="container app-container" id="app-view" style="display: none;">
+    <section class="left-col card">
+      <h2>Add Expense</h2>
+      <form id="expense-form" class="form">
+        <label>
+          Date
+          <input type="date" id="date" required />
+        </label>
+        <label>
+          Category
+          <input type="text" id="category" placeholder="Groceries" required />
+        </label>
+        <label>
+          Amount
+          <input type="number" id="amount" step="0.01" min="0" placeholder="0.00" required />
+        </label>
+        <label>
+          Description
+          <input type="text" id="description" placeholder="Optional notes" />
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Add Expense</button>
+          <button type="button" id="refresh-btn" class="btn">Refresh</button>
+        </div>
+      </form>
+
+      <hr />
+
+      <h2>Expenses</h2>
+      <div class="table-wrap">
+        <table id="expenses-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>Amount</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button id="prev-page" class="btn">Prev</button>
+        <span id="page-info">Page 1</span>
+        <button id="next-page" class="btn">Next</button>
+      </div>
+    </section>
+
+    <aside class="right-col">
+      <div class="card">
+        <h2>Spending by Category</h2>
+        <canvas id="categoryChart" height="240"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Spending by Month</h2>
+        <canvas id="monthChart" height="240"></canvas>
+      </div>
+
+      <div class="card summary">
+        <h3>Summary</h3>
+        <p>Total expenses: <strong id="total-expenses">₹0.00</strong></p>
+        <p>Unique categories: <strong id="unique-cats">0</strong></p>
+      </div>
+      <button id="logout-btn" class="btn">Logout</button>
+    </aside>
+  </main>
+  <footer class="footer">
+    <small>Frontend connected to Flask API at <code>http://127.0.0.1:5000/api/</code></small>
+  </footer>
+
+<script>
+const API_BASE = 'http://127.0.0.1:5000/api';
+const perPage = 8;
+let currentPage = 1;
+let totalRecords = 0;
+let authMode = 'login'; // 'login' or 'register'
+let isAuthenticated = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Authentication event listeners
+  document.getElementById('auth-form').addEventListener('submit', onAuthSubmit);
+  document.getElementById('toggle-auth-btn').addEventListener('click', toggleAuthMode);
+  document.getElementById('logout-btn').addEventListener('click', logout);
+
+  // App event listeners
+  document.getElementById('expense-form').addEventListener('submit', onAddExpense);
+  document.getElementById('refresh-btn').addEventListener('click', refreshAll);
+  document.getElementById('prev-page').addEventListener('click', () => changePage(-1));
+  document.getElementById('next-page').addEventListener('click', () => changePage(1));
+
+  // Check for stored session (basic check)
+  if (localStorage.getItem('isLoggedIn') === 'true') {
+    isAuthenticated = true;
+  }
+  updateView();
+});
+
+/* --- New Helper Functions for Authentication --- */
+
+// Helper to get the username for API calls
+const getUsername = () => localStorage.getItem('username');
+
+// New helper function to construct API request options with required header
+function getRequestOptions(method = 'GET', body = null) {
+    const username = getUsername();
+    // CRITICAL: Send username in this custom header for API filtering
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Username': username
+    };
+    const options = { method, headers };
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+    return options;
+}
+
+/* --- Authentication Functions --- */
+
+function updateView() {
+    const authView = document.getElementById('auth-view');
+    const appView = document.getElementById('app-view');
+    if (isAuthenticated) {
+        authView.style.display = 'none';
+        appView.style.display = 'grid'; // Use grid for container layout
+        refreshAll(); // Load data on successful login
+    } else {
+        authView.style.display = 'grid';
+        appView.style.display = 'none';
+        // Clear old data (optional, but good practice)
+        document.getElementById('expenses-table').querySelector('tbody').innerHTML = '';
+        if (categoryChart) categoryChart.destroy();
+        if (monthChart) monthChart.destroy();
+    }
+}
+
+function toggleAuthMode() {
+    authMode = authMode === 'login' ? 'register' : 'login';
+    document.getElementById('auth-title').textContent = authMode === 'login' ? 'Login' : 'Register';
+    document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'Login' : 'Register';
+    document.getElementById('toggle-auth-btn').textContent = authMode === 'login' ? 'Need an account? Register' : 'Already have an account? Login';
+}
+
+async function onAuthSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById('auth-username').value.trim();
+    const password = document.getElementById('auth-password').value.trim();
+    const endpoint = authMode === 'login' ? '/login' : '/register';
+    
+    try {
+        const res = await fetch(`${API_BASE}${endpoint}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password})
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.status === 'failed') {
+            throw new Error(data.message || (authMode === 'login' ? 'Login failed.' : 'Registration failed. Username might be taken.'));
+        }
+
+        if (authMode === 'register') {
+            alert('✅ Registration successful! Please login.');
+            toggleAuthMode();
+            document.getElementById('auth-form').reset();
+        } else {
+            // Assume successful login
+            isAuthenticated = true;
+            localStorage.setItem('isLoggedIn', 'true');
+            
+            // CRITICAL: Store the username returned from the API
+            const loggedInUsername = data.username;
+            localStorage.setItem('username', loggedInUsername);
+            
+            alert(`Welcome, ${loggedInUsername}!`);
+            updateView();
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+function logout() {
+    isAuthenticated = false;
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('username'); // CRITICAL: Remove username on logout
+    updateView();
+    // Reset inputs
+    document.getElementById('auth-form').reset();
+}
+
+/* --- Expense Tracker Functions (Now using the X-Username header) --- */
+
+async function onAddExpense(e) {
+  e.preventDefault();
+  const payload = {
+    date: document.getElementById('date').value,
+    category: document.getElementById('category').value.trim(),
+    amount: parseFloat(document.getElementById('amount').value),
+    description: document.getElementById('description').value.trim()
+  };
+
+  try {
+    const options = getRequestOptions('POST', payload);
+    const res = await fetch(`${API_BASE}/expenses`, options);
+    
+    // 1. Check for POST success
+    if (!res.ok) {
+        // If POST fails, throw an error immediately
+        throw new Error('Failed to add expense. Check server status.');
+    }
+    
+    // POST succeeded! Show success message and reset form.
+    alert('✅ Expense added successfully.');
+    e.target.reset();
+    currentPage = 1;
+
+    // 2. Wrap the refresh logic in its own try/catch
+    try {
+        await refreshAll();
+    } catch (refreshErr) {
+        // Report an issue with the refresh, not the initial POST
+        console.error("Refresh failed:", refreshErr);
+        alert('⚠️ Expense added, but failed to refresh data: ' + refreshErr.message);
+    }
+    
+  } catch (err) {
+    // This catches network errors or the POST failure error thrown above
+    alert('Error during submission: ' + err.message);
+  }
+}
+
+async function fetchExpenses(page = 1) {
+  const options = getRequestOptions('GET'); // Use helper to include X-Username
+  const res = await fetch(`${API_BASE}/expenses?page=${page}&per_page=${perPage}`, options);
+  if (!res.ok) throw new Error('Failed to fetch expenses');
+  return res.json();
+}
+
+async function fetchCategoryReport() {
+  const options = getRequestOptions('GET'); // Use helper to include X-Username
+  const res = await fetch(`${API_BASE}/reports/category`, options);
+  if (!res.ok) throw new Error('Failed to fetch category report');
+  return res.json();
+}
+
+async function fetchMonthReport() {
+  const options = getRequestOptions('GET'); // Use helper to include X-Username
+  const res = await fetch(`${API_BASE}/reports/month`, options);
+  if (!res.ok) throw new Error('Failed to fetch month report');
+  return res.json();
+}
+
+function formatCurrency(num) {
+  if (typeof num !== 'number') num = parseFloat(num) || 0;
+  return '₹' + num.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+async function refreshAll() {
+  if (!isAuthenticated) return; // Prevent loading data if not authenticated
+  await loadExpenses(currentPage);
+  await loadCharts();
+}
+
+async function loadExpenses(page) {
+  const payload = await fetchExpenses(page);
+  const rows = payload.data || [];
+  totalRecords = payload.total || rows.length;
+  populateTable(rows);
+  updatePaginationInfo();
+  updateSummary(rows);
+}
+
+function populateTable(rows) {
+  const tbody = document.querySelector('#expenses-table tbody');
+  tbody.innerHTML = '';
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">No expenses found</td></tr>';
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date}</td>
+      <td>${escapeHtml(r.category)}</td>
+      <td class="amt">${formatCurrency(r.amount)}</td>
+      <td>${escapeHtml(r.description || '')}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updatePaginationInfo() {
+  const pageInfo = document.getElementById('page-info');
+  const lastPage = Math.max(1, Math.ceil(totalRecords / perPage));
+  pageInfo.textContent = `Page ${currentPage} of ${lastPage}`;
+  document.getElementById('prev-page').disabled = currentPage <= 1;
+  document.getElementById('next-page').disabled = currentPage >= lastPage;
+}
+
+function changePage(delta) {
+  currentPage = Math.max(1, currentPage + delta);
+  refreshAll();
+}
+
+function updateSummary(rows) {
+  // Total calculation is now only for the current page, a better summary would calculate from a dedicated report API endpoint
+  const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const cats = new Set(rows.map(r => r.category)).size;
+  document.getElementById('total-expenses').textContent = formatCurrency(total);
+  document.getElementById('unique-cats').textContent = cats;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* Charts */
+let categoryChart = null;
+let monthChart = null;
+
+async function loadCharts() {
+  const catData = await fetchCategoryReport();
+  const monthData = await fetchMonthReport();
+  renderCategoryChart(catData);
+  renderMonthChart(monthData);
+}
+
+function renderCategoryChart(data) {
+  const ctx = document.getElementById('categoryChart').getContext('2d');
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d.category),
+      datasets: [{ label: 'Total', data: data.map(d => Number(d.total)) }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderMonthChart(data) {
+  const ctx = document.getElementById('monthChart').getContext('2d');
+  if (monthChart) monthChart.destroy();
+  monthChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: data.map(d => d.month),
+      datasets: [{ label: 'Total by Month', data: data.map(d => Number(d.total)) }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+}
+</script>
+</body>
+</html>

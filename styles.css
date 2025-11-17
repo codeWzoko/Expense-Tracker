@@ -1,0 +1,118 @@
+:root{
+  --bg:#f6f8fb;
+  --card:#ffffff;
+  --muted:#6b7280;
+  --accent:#2bb057;
+  --accent-2:#0ea5a4;
+  --shadow: 0 6px 18px rgba(22, 34, 56, 0.06);
+  --radius:12px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:#0f172a}
+.topbar{
+  background:linear-gradient(90deg,#0f172a 0%, #b02bac 100%);
+  color:white;
+  padding:20px 24px;
+  border-bottom-left-radius:16px;
+  border-bottom-right-radius:16px;
+  margin-bottom:18px;
+}
+.topbar h1{margin:0;font-size:20px;letter-spacing:0.4px}
+.topbar .subtitle{margin:4px 0 0;color:rgba(255,255,255,0.9);font-size:13px}
+
+/* --- Container and Layout Changes for Auth --- */
+
+/* General container properties */
+.container{
+  max-width:1200px;
+  margin:0 auto;
+  padding:16px;
+}
+
+/* Styles for the Authentication View: centered and narrow */
+.auth-container{
+  max-width: 400px;
+  margin: 50px auto 0;
+}
+
+/* Styles for the Main App View: grid layout */
+.app-container{
+  display:grid;
+  grid-template-columns: 1fr 360px;
+  gap:20px;
+}
+
+/* ------------------------------------------- */
+
+.card{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:16px;
+}
+
+.left-col{min-height:400px}
+.right-col{display:flex;flex-direction:column;gap:16px}
+
+.form label{
+  display:block;
+  margin-bottom:12px;
+  font-size:13px;
+  color:#ac4613;
+}
+.form input[type="text"],
+.form input[type="date"],
+.form input[type="number"],
+.form input[type="password"]{ /* Added password input */
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #e6e9ef;
+  margin-top:6px;
+  font-size:14px;
+}
+
+.form-actions{
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+}
+.btn{
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid #d1d5db;
+  background:white;
+  cursor:pointer;
+  font-weight:600;
+}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn.primary{
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  color:white;
+  border:0;
+  box-shadow: 0 6px 18px rgba(43,108,176,0.18);
+}
+
+.table-wrap{overflow:auto; max-height:320px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{
+  text-align:left;padding:10px 8px;border-bottom:1px solid #eef2f6;color:var(--muted);font-weight:700;
+}
+tbody td{padding:10px 8px;border-bottom:1px dashed #f1f5f9}
+tbody tr:hover{background:#fbfdff}
+
+.muted{text-align:center;color:var(--muted);padding:18px 0}
+
+.amt{text-align:right;font-weight:700}
+
+.pagination{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:12px}
+.footer{text-align:center;color:var(--muted);padding:12px;font-size:13px}
+
+/* small screens */
+@media (max-width: 900px){
+  .app-container{grid-template-columns: 1fr; padding:12px}
+  .right-col{order:2}
+  .left-col{order:1}
+}
